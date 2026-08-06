@@ -11,6 +11,7 @@ own prefix. The compute itself runs in a SEPARATE process
 
 import logging
 import threading
+import time
 
 from app.config import settings
 from app.repo import artifacts
@@ -33,7 +34,7 @@ from app.service.sfm_runner import (
     SfmTimeout,
     run_sfm_isolated,
 )
-from app.types.captures import Capture, CaptureArtifact
+from app.types.captures import Capture, CaptureArtifact, CaptureStage
 from app.types.formatting import humanize_bytes
 
 logger = logging.getLogger(__name__)
@@ -48,8 +49,15 @@ def run_capture(cid: str) -> Capture:
         if capture.status == "running" or cid in _running:
             raise CaptureConflictError()
         _running.add(cid)
+    now = _now()
     started = capture.model_copy(
-        update={"status": "running", "error": None, "updated_at": _now()}
+        update={
+            "status": "running",
+            "error": None,
+            # Reset on every (re-)run so the timer counts from THIS run's start.
+            "started_at": now,
+            "updated_at": now,
+        }
     )
     _save(started)
     threading.Thread(target=_execute, args=(cid,), daemon=True).start()
@@ -69,16 +77,32 @@ def _execute(cid: str) -> None:
                 input_frames.append((obj["Key"].rsplit("/", 1)[-1], data))
         source_bytes = sum(len(d) for _, d in input_frames)
 
+        def _persist_stages(snapshot: list[dict]) -> None:
+            # One cheap manifest write per stage transition, so the detail view's
+            # timeline advances live while the run is still "running".
+            live = _load(cid)
+            if live is None:  # deleted mid-run
+                return
+            stages = [CaptureStage.model_validate(s) for s in snapshot]
+            _save(live.model_copy(update={"stages": stages, "updated_at": _now()}))
+
+        started_at = time.monotonic()
         result = run_sfm_isolated(
             input_frames,
             quality=capture.quality,
             matcher=capture.matcher,
             device=detect_device(),
             timeout=settings.capture_run_timeout_seconds,
+            on_progress=_persist_stages,
         )
+        elapsed = time.monotonic() - started_at
         written = _write_artifacts(cid, result, dict(input_frames))
         metrics = result.metrics.model_copy(
-            update={"source_bytes": source_bytes, "artifact_bytes": written["bytes"]}
+            update={
+                "source_bytes": source_bytes,
+                "artifact_bytes": written["bytes"],
+                "duration_seconds": round(elapsed, 1),
+            }
         )
         done = _load(cid)
         if done is None:  # deleted mid-run

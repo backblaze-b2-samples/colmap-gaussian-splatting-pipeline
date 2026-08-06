@@ -18,19 +18,13 @@ function PlaceholderTile({ label }: { label: string }) {
 }
 
 /**
- * In-progress state for a running capture. The backend runs COLMAP in a
- * subprocess and streams NO per-stage progress, so this is deliberately
- * INDETERMINATE (a spinner + pulsing bar, never a fabricated percentage). It
- * lists the SfM stages so the main content shows real work is underway.
+ * In-progress indicator for the preview slot while a capture runs. The backend
+ * streams per-stage progress over its worker pipe, so the DETERMINATE live
+ * timeline (active stage, completed-stage count, elapsed timer) renders below in
+ * the detail view; this slot just holds the spot the rendered preview PNG fills
+ * once the run completes, hence a plain indeterminate spinner here.
  */
 function ProcessingTile() {
-  const stages = [
-    "SIFT feature extraction (CPU)",
-    "Feature matching",
-    "Incremental mapping (sparse SfM)",
-    "Stage Nerfstudio/gsplat bundle",
-    "Render point-cloud preview",
-  ];
   return (
     <div
       role="status"
@@ -43,14 +37,6 @@ function ProcessingTile() {
       <div className="h-1 w-40 overflow-hidden rounded-full bg-border">
         <div className="h-full w-full animate-pulse bg-primary/60" />
       </div>
-      <ol className="space-y-1 text-xs">
-        {stages.map((stage) => (
-          <li key={stage} className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" aria-hidden />
-            {stage}
-          </li>
-        ))}
-      </ol>
     </div>
   );
 }

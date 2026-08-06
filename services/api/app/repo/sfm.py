@@ -20,6 +20,7 @@ export) never needs the heavy wheel. This runs inside an isolated worker process
 import contextlib
 import shutil
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -103,17 +104,27 @@ def run_sfm(
     quality: str,
     matcher: str,
     device: str | None = None,
+    progress: Callable[[list[CaptureStage]], None] | None = None,
 ) -> SfmResult:
     """Run COLMAP SfM over ``frames`` and stage the reconstruction bundle.
 
     ``frames`` is ``[(name, jpeg_bytes), ...]`` (already downscaled at ingest).
     Raises ValueError when COLMAP cannot register a model (too few overlapping
     views). Returns an :class:`SfmResult` of artifact bytes + metrics + stages.
+
+    ``progress`` (when given) is called with a fresh snapshot of the stage list
+    after each transition, so the caller can stream live progress during the
+    otherwise multi-minute run.
     """
     import pycolmap
 
     dev = device or detect_device()
     stages = _initial_stages()
+
+    def notify() -> None:
+        # Emit a distinct copy each time — ``stages`` is mutated in place.
+        if progress is not None:
+            progress([s.model_copy() for s in stages])
 
     if len(frames) < 3:
         raise ValueError(
@@ -127,6 +138,7 @@ def run_sfm(
         for name, data in frames:
             (image_dir / name).write_bytes(data)
         _stage(stages, "ingest", "done", f"{len(frames)} frames staged for SfM")
+        notify()
 
         database_path = root / "database.db"
         cpu = pycolmap.Device.cpu
@@ -144,12 +156,14 @@ def run_sfm(
             device=cpu,
         )
         _stage(stages, "features", "done", f"SIFT (max {max_features} feats/img, CPU)")
+        notify()
 
         if matcher == "sequential":
             _safe_call(pycolmap.match_sequential, database_path, device=cpu)
         else:
             _safe_call(pycolmap.match_exhaustive, database_path, device=cpu)
         _stage(stages, "matching", "done", f"{matcher} matching")
+        notify()
 
         output_path = root / "sparse"
         output_path.mkdir()
@@ -166,6 +180,7 @@ def run_sfm(
         rec = max(recs, key=_num_reg_images)
         reg = _num_reg_images(rec)
         _stage(stages, "mapping", "done", f"{reg}/{len(frames)} images registered")
+        notify()
 
         model_dir = root / "model"
         model_dir.mkdir()
@@ -183,12 +198,15 @@ def run_sfm(
 
         transforms_json = bundle.build_transforms(rec)
         _stage(stages, "bundle", "done", "transforms.json + undistortion params")
+        notify()
 
         dense_enabled = _maybe_dense(dev, stages)
+        notify()
 
         xyz, rgb = bundle.point_arrays(rec)
         preview_png = preview.render_point_cloud(xyz, rgb)
         _stage(stages, "preview", "done", f"{len(xyz):,} sparse points rendered")
+        notify()
 
         names = [rec.images[i].name for i in sorted(rec.images)]
         metrics = CaptureMetrics(

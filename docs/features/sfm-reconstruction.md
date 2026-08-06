@@ -30,8 +30,8 @@ lifecycle of the primary entity, **Capture**.
 
 ## Outputs
 - sparse `points.ply`, COLMAP text model (`cameras.txt`, `images.txt`), preview PNG
-- `CaptureMetrics` (registered images, sparse points, observations, mean reproj. error, device)
-- side effects: writes artifacts under `captures/<id>/`, flips manifest `running -> done|failed`
+- `CaptureMetrics` (registered images, sparse points, observations, mean reproj. error, device, wall-clock `duration_seconds`)
+- side effects: writes artifacts under `captures/<id>/`, flips manifest `running -> done|failed`, and persists a live `stages` snapshot on every stage transition while running
 
 ## Flow
 - Stage frames into a temp image dir in the worker process
@@ -39,6 +39,7 @@ lifecycle of the primary entity, **Capture**.
 - `pycolmap.match_exhaustive` or `match_sequential`
 - `pycolmap.incremental_mapping` -> pick the reconstruction with the most registered images
 - Export PLY + text model, build the bundle, render the preview, gate dense MVS on CUDA
+- After each stage the worker streams a snapshot back over the isolation Pipe (a `("progress", ...)` message); the parent persists it to the manifest so the detail view advances live. The wait stays bounded by one monotonic deadline, so streaming never extends the run past `timeout`.
 
 ## Edge Cases
 - < 3 frames -> ValueError ("need at least 3 overlapping views")
@@ -48,7 +49,7 @@ lifecycle of the primary entity, **Capture**.
 
 ## UX States
 - Empty: no captures yet
-- Loading: `running` shows an indeterminate stage list (no fabricated percentage)
+- Loading: `running` shows a live pipeline timeline — the active stage highlighted with a spinner, completed stages checked, a determinate progress bar (completed/total stages), and an elapsed-time counter; it falls back to an indeterminate spinner only until the first stage snapshot streams in
 - Error: failed captures show the recorded error in an Alert
 
 ## Verification

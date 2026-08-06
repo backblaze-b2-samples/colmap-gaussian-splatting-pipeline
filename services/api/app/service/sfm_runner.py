@@ -16,6 +16,7 @@ child imports no ``boto3`` — it only runs COLMAP and renders the preview.
 
 import logging
 import multiprocessing as mp
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -39,9 +40,24 @@ class SfmError(Exception):
     """The reconstruction raised an ordinary Python exception in the worker."""
 
 
-def _worker(conn, fn: Callable, args: tuple, kwargs: dict) -> None:
-    """Child entrypoint: run ``fn`` and ship a tagged result back over ``conn``."""
+def _worker(
+    conn, fn: Callable, args: tuple, kwargs: dict, stream_progress: bool
+) -> None:
+    """Child entrypoint: run ``fn`` and ship a tagged result back over ``conn``.
+
+    When ``stream_progress`` is set, inject a ``progress`` callback into ``fn``'s
+    kwargs that ships each stage snapshot to the parent as a picklable
+    ``("progress", list[dict])`` message. The terminal outcome is still a single
+    ``("ok", result)`` / ``("error", msg)`` message at the end.
+    """
     try:
+        if stream_progress:
+            kwargs = {
+                **kwargs,
+                "progress": lambda snapshot: conn.send(
+                    ("progress", [stage.model_dump() for stage in snapshot])
+                ),
+            }
         result = fn(*args, **kwargs)
         conn.send(("ok", result))
     except Exception as exc:  # ordinary failure -> report cleanly to the parent
@@ -63,9 +79,16 @@ def run_in_process(
     args: tuple = (),
     kwargs: dict | None = None,
     timeout: float,
+    on_progress: Callable[[Any], None] | None = None,
 ) -> Any:
     """Run ``fn(*args, **kwargs)`` in a separate 'spawn' process, bounded by
     ``timeout`` seconds.
+
+    Consumes a STREAM of messages over the pipe: each ``("progress", payload)``
+    is handed to ``on_progress`` (when given) and the loop keeps waiting; the run
+    ends on ``("ok", result)`` / ``("error", msg)`` / EOF. The whole stream is
+    bounded by a single MONOTONIC deadline, so streaming progress can never
+    extend the run past ``timeout``.
 
     Raises :class:`SfmTimeout` if the deadline passes (the child is killed
     first), :class:`SfmCrashed` if the child dies without a result, or
@@ -75,7 +98,7 @@ def run_in_process(
     parent_conn, child_conn = ctx.Pipe(duplex=False)
     proc = ctx.Process(
         target=_worker,
-        args=(child_conn, fn, args, kwargs or {}),
+        args=(child_conn, fn, args, kwargs or {}, on_progress is not None),
         daemon=True,
     )
     proc.start()
@@ -84,13 +107,25 @@ def run_in_process(
 
     status: str | None = None
     payload: Any = None
+    deadline = time.monotonic() + timeout
     try:
-        if not parent_conn.poll(timeout):
-            raise SfmTimeout("Reconstruction exceeded the per-run time limit")
-        try:
-            status, payload = parent_conn.recv()
-        except EOFError:  # child died mid-/pre-send (native crash)
-            status = None
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not parent_conn.poll(remaining):
+                raise SfmTimeout("Reconstruction exceeded the per-run time limit")
+            try:
+                status, payload = parent_conn.recv()
+            except EOFError:  # child died mid-/pre-send (native crash)
+                status = None
+                break
+            if status == "progress":
+                if on_progress is not None:
+                    try:
+                        on_progress(payload)
+                    except Exception:  # a persist hiccup must not abort the run
+                        logger.warning("progress callback failed", exc_info=True)
+                continue
+            break  # ("ok", ...) or ("error", ...) — the terminal message
     finally:
         parent_conn.close()
         _reap(proc)
@@ -111,11 +146,17 @@ def run_sfm_isolated(
     matcher: str,
     device: str | None,
     timeout: float,
+    on_progress: Callable[[Any], None] | None = None,
 ) -> SfmResult:
-    """Run :func:`app.repo.sfm.run_sfm` in an isolated worker process."""
+    """Run :func:`app.repo.sfm.run_sfm` in an isolated worker process.
+
+    ``on_progress`` receives each live stage snapshot (a ``list[dict]``) as the
+    reconstruction advances, so the parent can persist progress mid-run.
+    """
     return run_in_process(
         run_sfm,
         args=(frames,),
         kwargs={"quality": quality, "matcher": matcher, "device": device},
         timeout=timeout,
+        on_progress=on_progress,
     )

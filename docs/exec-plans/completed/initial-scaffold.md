@@ -1,5 +1,3 @@
-<!-- completed: 2026-08-06 — initial scaffold built and verified (pnpm verify green; b2-doctor clean) -->
-
 # Build plan — `colmap-gaussian-splatting-pipeline`
 
 Source of truth for the starter tree:

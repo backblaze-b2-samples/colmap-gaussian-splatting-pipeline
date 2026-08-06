@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Check,
   Download,
+  Loader2,
   Minus,
   Pencil,
   Play,
@@ -153,7 +155,13 @@ export function CaptureDetail({ id }: { id: string }) {
         </Card>
       </div>
 
-      {capture.stages.length > 0 && <StageTimeline stages={capture.stages} />}
+      {capture.stages.length > 0 && (
+        <StageTimeline
+          stages={capture.stages}
+          running={capture.status === "running"}
+          startedAt={capture.started_at}
+        />
+      )}
 
       {capture.status === "done" && (
         <>
@@ -183,31 +191,114 @@ const STAGE_ICON = {
   pending: <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" aria-hidden />,
 } as const;
 
-function StageTimeline({ stages }: { stages: CaptureStage[] }) {
+const STAGE_TERMINAL: readonly CaptureStage["status"][] = ["done", "skipped", "failed"];
+
+function StageTimeline({
+  stages,
+  running = false,
+  startedAt = null,
+}: {
+  stages: CaptureStage[];
+  running?: boolean;
+  startedAt?: string | null;
+}) {
+  const total = stages.length;
+  const completed = stages.filter((s) => STAGE_TERMINAL.includes(s.status)).length;
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  // While running, the active stage is the first one not yet terminal. The
+  // backend streams a snapshot after each transition, so this advances live.
+  const activeKey = running
+    ? stages.find((s) => !STAGE_TERMINAL.includes(s.status))?.key ?? null
+    : null;
+
   return (
     <Card>
       <CardHeader className="border-b border-border py-4 px-5">
         <CardTitle className="card-title">Pipeline stages</CardTitle>
       </CardHeader>
       <CardContent className="p-5">
-        <ol className="space-y-2.5">
-          {stages.map((stage) => (
-            <li key={stage.key} className="flex items-center gap-3">
-              <span className="flex h-5 w-5 items-center justify-center">
-                {STAGE_ICON[stage.status]}
+        {running && (
+          <div className="mb-5 space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span className="tabular-nums">
+                {completed} of {total} stages complete
               </span>
-              <span className="text-sm font-medium">{stage.label}</span>
-              {stage.detail && (
-                <span className="ml-auto truncate text-xs text-muted-foreground">
-                  {stage.detail}
+              <RunTimer startedAt={startedAt} />
+            </div>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-border"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        )}
+        <ol className="space-y-2.5">
+          {stages.map((stage) => {
+            const isActive = stage.key === activeKey;
+            return (
+              <li
+                key={stage.key}
+                className={`flex items-center gap-3 ${isActive ? "text-foreground" : ""}`}
+              >
+                <span className="flex h-5 w-5 items-center justify-center">
+                  {isActive ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden />
+                  ) : (
+                    STAGE_ICON[stage.status]
+                  )}
                 </span>
-              )}
-            </li>
-          ))}
+                <span className="text-sm font-medium">{stage.label}</span>
+                {(isActive || stage.detail) && (
+                  <span className="ml-auto truncate text-xs text-muted-foreground">
+                    {isActive ? "Working…" : stage.detail}
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ol>
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * Live elapsed-time counter, ticking each second while a run is active. Anchors
+ * to the capture's authoritative server run-start timestamp (`started_at`, UTC
+ * ISO) so the elapsed value reflects true time-since-run-start and survives a
+ * page reload. Falls back to mount time only for older captures with no
+ * `started_at`. `Date.parse` yields UTC epoch ms regardless of the offset
+ * suffix, so the subtraction against `Date.now()` is timezone-safe.
+ */
+function RunTimer({ startedAt }: { startedAt: string | null }) {
+  const parsed = startedAt ? Date.parse(startedAt) : NaN;
+  const anchor = Number.isNaN(parsed) ? null : parsed;
+  const [seconds, setSeconds] = useState(() =>
+    anchor === null ? 0 : Math.max(0, Math.floor((Date.now() - anchor) / 1000)),
+  );
+  useEffect(() => {
+    const base = anchor ?? Date.now();
+    const tick = () =>
+      setSeconds(Math.max(0, Math.floor((Date.now() - base) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [anchor]);
+  return <span className="tabular-nums">{formatDuration(seconds)} elapsed</span>;
+}
+
+/** Seconds -> compact human duration, e.g. 166 -> "2m 46s", 42 -> "42s". */
+function formatDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds));
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
 function MetricsCard({ capture }: { capture: Capture }) {
@@ -219,7 +310,7 @@ function MetricsCard({ capture }: { capture: Capture }) {
     ["Observations", m.observations.toLocaleString()],
     ["Mean reprojection error", `${m.mean_reprojection_error}px`],
     ["Dense MVS", m.dense_enabled ? "Ran (CUDA)" : "Skipped (CPU)"],
-    ["Run time", `${m.duration_seconds}s`],
+    ["Run time", formatDuration(m.duration_seconds)],
   ];
   return (
     <Card>

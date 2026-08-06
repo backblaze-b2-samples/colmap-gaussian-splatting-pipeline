@@ -105,6 +105,10 @@ class Capture(CaptureParams):
     status: CaptureStatus
     created_at: datetime
     updated_at: datetime
+    # Authoritative UTC start of the current/most-recent run — set when status
+    # flips to "running" (reset on re-run), null until a capture first runs.
+    # Anchors the live elapsed timer so it survives a page reload.
+    started_at: datetime | None = None
     input_count: int = 0
     error: str | None = None
     metrics: CaptureMetrics = Field(default_factory=CaptureMetrics)

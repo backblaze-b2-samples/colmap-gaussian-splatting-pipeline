@@ -108,6 +108,8 @@ export interface Capture {
   status: CaptureStatus;
   created_at: string;
   updated_at: string;
+  /** UTC ISO start of the current/most-recent run; null until a capture runs. */
+  started_at: string | null;
   input_count: number;
   error: string | null;
   metrics: CaptureMetrics;
