@@ -15,13 +15,21 @@ Explore the official [Backblaze B2 AI integrations and sample applications](http
 
 ## What it looks like
 
-**Dashboard** — captures, frames ingested, sparse points reconstructed, and artifacts on B2:
+**Dashboard** — captures, frames ingested, sparse points reconstructed, and total artifacts on B2, alongside a 7-day B2 write-activity chart and a recent-captures table.
 
-![Dashboard view showing capture stat cards, B2 write-activity chart, and a recent captures table](docs/images/dashboard.png)
+![Dashboard view showing capture stat cards, a B2 write-activity chart, and a recent captures table](docs/images/dashboard.png)
 
-**Capture detail** — sparse point-cloud preview, pipeline stages, reconstruction metrics, and versioned artifacts on B2:
+**Captures library** — every photogrammetry job as a card with its sparse point-cloud thumbnail, frame count, quality/matcher, registered images, and point total.
 
-![Capture detail view showing the sparse point-cloud preview, the SfM stage timeline, and downloadable artifacts](docs/images/capture-detail.png)
+![Captures library grid of reconstruction jobs, each with a point-cloud thumbnail and Done status](docs/images/captures.png)
+
+**New capture** — name the reconstruction and pick the source, SfM quality preset, feature matcher, and max image dimension before ingesting frames.
+
+![New capture form with name, source, quality, matcher, and max image dimension fields](docs/images/new-capture.png)
+
+**Capture detail** — sparse point-cloud preview, the COLMAP stage timeline with the CUDA-only tail gated, reconstruction metrics, the exact ns-train command, and every artifact versioned on B2.
+
+![Capture detail view showing the sparse point-cloud preview, the SfM stage timeline, reconstruction metrics, and downloadable B2 artifacts](docs/images/capture-detail.png)
 
 ## Quick Start
 
