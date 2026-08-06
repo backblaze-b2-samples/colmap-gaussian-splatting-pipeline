@@ -1,23 +1,55 @@
-<!-- last_verified: 2026-07-30 -->
+<!-- last_verified: 2026-08-06 -->
 # Architecture
+
+COLMAP Gaussian Splatting Pipeline is a capture-to-B2 photogrammetry app. The
+primary entity is a **Capture** — a COLMAP structure-from-motion reconstruction
+job whose system of record is a JSON manifest in B2. The starter's UI kit,
+full-bucket File Explorer, and Upload are kept; the reconstruction engine,
+Captures screens, and photogrammetry dashboard are added.
 
 ## Components
 
 - **apps/web/** — Next.js 16 frontend (App Router, Tailwind v4, shadcn/ui)
-  - Dashboard with stats, upload chart, recent uploads
-  - File upload with drag-and-drop, progress tracking
-  - File browser with preview, download, delete
+  - Photogrammetry dashboard (captures, frames ingested, sparse points, artifacts on B2)
+  - Captures library + capture detail (ingest, stage timeline, sparse-cloud preview, artifacts, run/edit/delete/re-run)
+  - Kept starter surfaces: full-bucket File Explorer, drag-and-drop Upload, Design System
   - Dark mode via `next-themes`
 - **services/api/** — FastAPI backend (layered architecture)
-  - REST API for file upload, listing, deletion
-  - B2 S3 integration via boto3
-  - File metadata extraction (images, PDFs)
-  - Health check endpoint with B2 connectivity verification
-  - Structured JSON logging with request tracing
-  - Prometheus-format metrics endpoint
+  - Capture lifecycle REST API (create/read/update/delete/ingest/run) + kept file/upload endpoints
+  - COLMAP structure-from-motion via `pycolmap` (CPU), run in an isolated worker process
+  - Nerfstudio/gsplat bundle staging (`transforms.json`, sparse model, `points.ply`) + `ns-train` command
+  - Headless matplotlib point-cloud preview render
+  - B2 S3 integration via boto3; capture manifests + artifacts stored on B2 (no database)
+  - Health check, structured JSON logging with request tracing, Prometheus-format metrics
 - **packages/shared/** — TypeScript type definitions
-  - Mirrors Pydantic models from the API
+  - Mirrors Pydantic models from the API (incl. `Capture`, `CaptureStats`)
   - Consumed by `apps/web/` as workspace dependency
+
+## Reconstruction pipeline
+
+The heavy compute is confined to `repo/` with LAZY imports (the wheels are never
+needed to import the app, collect tests, or export the OpenAPI contract):
+
+```
+repo/frames.py    Video frame sampling (imageio + bundled ffmpeg) + image downscale (PIL)
+repo/sfm.py       COLMAP SfM engine (pycolmap): SIFT (CPU) -> match -> incremental mapping
+repo/bundle.py    Nerfstudio transforms.json builder, sparse point extraction, ns-train command
+repo/preview.py   Headless matplotlib sparse point-cloud render (Agg backend)
+repo/artifacts.py B2 manifest + artifact I/O (boto3): put/get/list/delete + object versions
+```
+
+Orchestration lives in `service/`: `service/captures.py` owns the lifecycle and
+the B2-backed manifest store; `service/capture_runner.py` runs a capture and
+persists artifacts; `service/sfm_runner.py` executes `repo.sfm.run_sfm` in an
+isolated `spawn` process so a native COLMAP crash/segfault or a hang is contained
+to that child and turned into a `failed` manifest — it can never wedge the API.
+
+**Device gating.** `repo.sfm.detect_device()` auto-detects the compute device:
+CUDA if a CUDA-capable `pycolmap`/`nvidia-smi` is present, else CPU (MPS is N/A
+to COLMAP's C++/CUDA kernels). Sparse SfM always runs on CPU. Dense MVS and
+gsplat/NeRF training are CUDA-only: on a CPU host the pipeline stages the bundle
+and emits the exact `ns-train` command instead of faking a trained splat. No GPU
+is ever hard-required.
 
 ## Backend Layering
 
@@ -49,12 +81,13 @@ runtime/   FastAPI routes — calls service, never repo directly
 services/api/
   main.py                  App entrypoint, middleware, router registration
   app/
-    types/                 Pydantic models (FileMetadata, UploadStats, etc.)
+    types/                 Pydantic models (Capture, CaptureStats, FileMetadata, ...)
     config/                Settings loaded from environment
-    repo/                  B2 S3 client (data access layer)
-    service/               Business logic (upload, files, metadata)
-    runtime/               FastAPI route handlers
-  tests/                   pytest tests (structural + integration)
+    repo/                  B2 S3 client + reconstruction engine (sfm/bundle/preview/frames/artifacts)
+    service/               Lifecycle + run orchestration (captures, capture_runner, sfm_runner)
+    runtime/               FastAPI route handlers (captures, files, upload, ...)
+  scripts/                 export_openapi.py, seed_demo.py (optional synthetic capture)
+  tests/                   pytest tests (structural + integration + engine units)
 ```
 
 ## Boundary Invariants
@@ -87,10 +120,15 @@ External provisioning and deployment remain explicit user-approved actions.
 
 ## Data Stores
 
-- **Backblaze B2** — object storage (S3-compatible API)
-  - All uploaded files stored in a single bucket
-  - File listing and metadata via S3 `list_objects_v2` / `head_object`
-  - No application database — B2 is the sole data store
+- **Backblaze B2** — object storage (S3-compatible API), the sole data store
+  - Each capture is a B2 prefix `captures/<id>/` holding `manifest.json`
+    (status, params, stages, metrics, artifacts, timestamps), `inputs/` (raw
+    frames), `sparse/` (COLMAP model + `points.ply`), `bundle/`
+    (`transforms.json` + registered frames), and `previews/` (preview PNG)
+  - Listing captures = list `captures/` + read each manifest; **no database**
+  - Object versions surfaced per artifact via `list_object_versions`
+    (degrades gracefully when bucket versioning is suspended)
+  - `delete` is strictly prefix-scoped to `captures/<id>/` — never bucket-wide
 
 ## External Services
 
@@ -106,10 +144,12 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full security documentation.
 
 ## Data Flows
 
-- **Upload**: Browser -> `POST /upload` (multipart) -> API validates -> service orchestrates -> repo writes to B2 -> metadata extracted -> response
-- **List**: Browser -> `GET /files` -> service calls repo -> returns file list
-- **Download**: Browser -> `GET /files/{key}/download` -> service validates key -> repo generates presigned URL -> browser downloads
-- **Delete**: Browser -> `DELETE /files/{key}` -> service validates key -> repo deletes from B2
+- **Create capture**: Browser -> `POST /captures` -> service writes a `draft` manifest to B2
+- **Ingest**: Browser -> `POST /captures/{id}/images` or `/video` (multipart) -> repo.frames downscales/samples -> repo.artifacts writes frames to `inputs/` -> manifest `ready`
+- **Run**: Browser -> `POST /captures/{id}/run` -> manifest `running` -> background thread downloads frames -> `sfm_runner` runs COLMAP in an isolated process -> capture_runner writes sparse model + bundle + preview to B2 -> manifest `done`/`failed`. The frontend polls the manifest while `running`.
+- **Read**: Browser -> `GET /captures` / `GET /captures/{id}` -> service reads manifests from B2
+- **Download artifact**: Browser -> `GET /files-by-key/download` -> repo generates a presigned URL -> browser downloads
+- **Delete**: Browser -> `DELETE /captures/{id}` -> service deletes the capture's own prefix from B2 (scoped)
 
 ## Observability
 
@@ -132,23 +172,27 @@ silently drift from FastAPI. `GET /metrics` is intentionally server-only.
 
 ## Canonical Files
 
-- Layered API handler: `services/api/app/runtime/upload.py`
-- Service orchestration: `services/api/app/service/upload.py`
-- B2 data access (repo layer): `services/api/app/repo/b2_client.py`
-- Pydantic models: `services/api/app/types/` (`files.py`, `upload.py`, `stats.py`, `formatting.py`)
+- Capture routes: `services/api/app/runtime/captures.py`
+- Capture lifecycle + manifest store: `services/api/app/service/captures.py`
+- Run orchestration: `services/api/app/service/capture_runner.py`
+- Isolated worker: `services/api/app/service/sfm_runner.py`
+- COLMAP engine (repo): `services/api/app/repo/sfm.py` (+ `bundle.py`, `preview.py`, `frames.py`)
+- B2 manifest/artifact I/O (repo): `services/api/app/repo/artifacts.py`; base client: `repo/b2_client.py`
+- Pydantic models: `services/api/app/types/` (`captures.py`, `files.py`, `upload.py`, `stats.py`, `formatting.py`)
 - Config (pydantic-settings): `services/api/app/config/settings.py`
-- Structural tests: `services/api/tests/test_structure.py`
-- OpenAPI contract: `docs/api/openapi.json`
-- OpenAPI exporter: `services/api/scripts/export_openapi.py`
-- Frontend API client: `apps/web/src/lib/api-client.ts`
-- Shared TypeScript types: `packages/shared/src/types.ts`
+- Structural tests: `services/api/tests/test_structure.py`; engine units: `tests/test_sfm_engine.py`; lifecycle: `tests/test_captures.py`
+- OpenAPI contract: `docs/api/openapi.json`; exporter: `services/api/scripts/export_openapi.py`
+- Frontend API client: `apps/web/src/lib/api-client.ts`; shared types: `packages/shared/src/types.ts`
 
 ## Core Features
 
-- [File Upload](docs/features/file-upload.md)
-- [File Browser](docs/features/file-browser.md)
-- [Dashboard](docs/features/dashboard.md)
-- [Metadata Extraction](docs/features/metadata-extraction.md)
+- [Capture ingest](docs/features/capture-ingest.md)
+- [COLMAP structure-from-motion](docs/features/sfm-reconstruction.md)
+- [Splat / NeRF staging](docs/features/splat-staging.md)
+- [Point-cloud preview](docs/features/point-cloud-preview.md)
+- [Versioned artifact store on B2](docs/features/capture-storage.md)
+- [Captures library + dashboard](docs/features/captures-dashboard.md)
+- [File Upload](docs/features/file-upload.md) and [File Browser](docs/features/file-browser.md) (kept scaffolding)
 
 ## References
 

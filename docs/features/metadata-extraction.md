@@ -1,6 +1,11 @@
 <!-- last_verified: 2026-07-28 -->
 # Feature: Metadata Extraction
 
+> Kept from the starter, out of the core capture domain but still useful for
+> **frame metadata**: image dimensions and EXIF are handy when inspecting a
+> capture's raw frames in the File Explorer. The COLMAP reconstruction itself
+> reads pixels via `pycolmap`, not this extractor.
+
 ## Purpose
 Extract rich metadata from uploaded files and surface it both at upload time and for already-stored objects.
 

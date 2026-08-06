@@ -34,11 +34,13 @@ def test_openapi_metadata_uses_canonical_local_api_identity():
     schema = app.openapi()
 
     assert schema["info"] == {
-        "title": "Vibe Coding Starter Kit API",
+        "title": "COLMAP Gaussian Splatting Pipeline API",
         "description": (
-            "Local API for the Vibe Coding Starter Kit template, providing file "
-            "upload and management backed by Backblaze B2. This contract "
-            "documents the template's local API, not a hosted public endpoint."
+            "Local API for the COLMAP Gaussian Splatting Pipeline: create a Capture "
+            "from an image set or capture video, run COLMAP structure-from-motion on "
+            "CPU, and stage a Nerfstudio/gsplat-ready bundle. Every input and derived "
+            "artifact is versioned in Backblaze B2. This contract documents the local "
+            "API, not a hosted public endpoint."
         ),
         "version": "0.1.0",
     }

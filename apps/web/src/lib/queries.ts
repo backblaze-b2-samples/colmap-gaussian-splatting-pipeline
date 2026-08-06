@@ -8,7 +8,12 @@ import {
 } from "@tanstack/react-query";
 import {
   ApiError,
+  createCapture,
+  deleteCapture,
   deleteFile,
+  getCapture,
+  getCaptures,
+  getCaptureStats,
   getDownloadUrl,
   getFileDetail,
   getFiles,
@@ -16,11 +21,19 @@ import {
   getHealth,
   getPreviewUrl,
   getUploadActivity,
+  ingestImages,
+  ingestVideo,
+  runCapture,
+  updateCapture,
 } from "@/lib/api-client";
 import type {
+  Capture,
+  CaptureCreate,
+  CaptureStats,
+  CaptureUpdate,
   FileMetadata,
   FileMetadataDetail,
-} from "@vibe-coding-starter-kit/shared";
+} from "@colmap-gaussian-splatting-pipeline/shared";
 
 // Single source of truth for query keys. Keep these tightly scoped so that
 // invalidating "files" doesn't blow away unrelated caches, and so an IDE
@@ -35,7 +48,15 @@ export const qk = {
   preview: (key: string) => [...qk.all, "preview", key] as const,
   detail: (key: string) => [...qk.all, "detail", key] as const,
   health: () => [...qk.all, "health"] as const,
+  captures: () => [...qk.all, "captures"] as const,
+  capture: (id: string) => [...qk.all, "captures", id] as const,
+  captureStats: () => [...qk.all, "captures", "stats"] as const,
 };
+
+/** True while a capture is still working — decides whether to keep polling. */
+function isCaptureActive(status: string | undefined): boolean {
+  return status === "running";
+}
 
 export type Health = Awaited<ReturnType<typeof getHealth>>;
 
@@ -165,6 +186,106 @@ export function useDeleteFile() {
       // Remove the row immediately, then reconcile everything (lists, stats,
       // activity) against the server in the background.
       dropDeletedFileFromCache(qc, fileKey);
+      qc.invalidateQueries({ queryKey: qk.all });
+    },
+  });
+}
+
+// --- Captures (primary entity) ---------------------------------------------
+
+/**
+ * Capture list. Polls every 3s while any capture is running so a run's status
+ * flip (and its new preview thumbnail) appears without a manual refresh; idle
+ * once everything is done/failed.
+ */
+export function useCaptures({ enabled = true }: QueryGate = {}) {
+  return useQuery<Capture[], ApiError>({
+    queryKey: qk.captures(),
+    queryFn: getCaptures,
+    enabled,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((c) => isCaptureActive(c.status)) ? 3000 : false,
+  });
+}
+
+/** One capture. Polls every 2s while the run is active, then stops. */
+export function useCapture(id: string | undefined, { enabled = true }: QueryGate = {}) {
+  return useQuery<Capture, ApiError>({
+    queryKey: qk.capture(id ?? ""),
+    queryFn: () => getCapture(id as string),
+    enabled: enabled && !!id,
+    refetchInterval: (query) => (isCaptureActive(query.state.data?.status) ? 2000 : false),
+  });
+}
+
+export function useCaptureStats({ enabled = true }: QueryGate = {}) {
+  return useQuery<CaptureStats, ApiError>({
+    queryKey: qk.captureStats(),
+    queryFn: getCaptureStats,
+    enabled,
+    refetchInterval: 5000,
+  });
+}
+
+export function useCreateCapture() {
+  const qc = useQueryClient();
+  return useMutation<Capture, ApiError, CaptureCreate>({
+    mutationFn: (body) => createCapture(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.captures() }),
+  });
+}
+
+export function useUpdateCapture(id: string) {
+  const qc = useQueryClient();
+  return useMutation<Capture, ApiError, CaptureUpdate>({
+    mutationFn: (body) => updateCapture(id, body),
+    onSuccess: (capture) => {
+      qc.setQueryData(qk.capture(id), capture);
+      qc.invalidateQueries({ queryKey: qk.captures() });
+    },
+  });
+}
+
+export function useDeleteCapture() {
+  const qc = useQueryClient();
+  return useMutation<{ deleted: boolean; id: string }, ApiError, string>({
+    mutationFn: (id) => deleteCapture(id),
+    onSuccess: (_data, id) => {
+      qc.removeQueries({ queryKey: qk.capture(id) });
+      // A delete removes B2 objects too — refresh captures, stats, file lists.
+      qc.invalidateQueries({ queryKey: qk.all });
+    },
+  });
+}
+
+export function useRunCapture() {
+  const qc = useQueryClient();
+  return useMutation<Capture, ApiError, string>({
+    mutationFn: (id) => runCapture(id),
+    onSuccess: (capture) => {
+      qc.setQueryData(qk.capture(capture.id), capture);
+      qc.invalidateQueries({ queryKey: qk.captures() });
+    },
+  });
+}
+
+export function useIngestImages(id: string) {
+  const qc = useQueryClient();
+  return useMutation<Capture, ApiError, File[]>({
+    mutationFn: (files) => ingestImages(id, files),
+    onSuccess: (capture) => {
+      qc.setQueryData(qk.capture(id), capture);
+      qc.invalidateQueries({ queryKey: qk.all });
+    },
+  });
+}
+
+export function useIngestVideo(id: string) {
+  const qc = useQueryClient();
+  return useMutation<Capture, ApiError, File>({
+    mutationFn: (file) => ingestVideo(id, file),
+    onSuccess: (capture) => {
+      qc.setQueryData(qk.capture(id), capture);
       qc.invalidateQueries({ queryKey: qk.all });
     },
   });

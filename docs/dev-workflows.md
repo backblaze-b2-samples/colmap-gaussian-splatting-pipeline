@@ -124,7 +124,7 @@ with a concurrently held `0.0.0.0` bind and would report a free port as busy.
 - Frontend typecheck: `pnpm typecheck`
 - Frontend lint: `pnpm lint`
 - Backend lint: `pnpm lint:api`
-- E2E: `pnpm test:e2e` (run `pnpm --filter @vibe-coding-starter-kit/web exec playwright install chromium` once first)
+- E2E: `pnpm test:e2e` (run `pnpm --filter @colmap-gaussian-splatting-pipeline/web exec playwright install chromium` once first)
 
 ### Pre-commit
 
@@ -180,10 +180,23 @@ request *shapes* — and the hand-written mirrors of the Pydantic models in
 `packages/shared/src/types.ts` — are still synced by hand and unverified. See
 the tech-debt tracker.
 
+### Heavy reconstruction dependencies (pycolmap, matplotlib, imageio)
+
+The COLMAP engine wheels — `pycolmap`, `numpy`, `matplotlib`, `imageio` +
+`imageio-ffmpeg`, `plyfile` — are heavy and platform-specific, so they are
+imported **lazily inside functions** in `app/repo/` (`sfm.py`, `bundle.py`,
+`preview.py`, `frames.py`), never at module top level. This mirrors the
+starter's lazy `PIL` use and means importing the FastAPI app, collecting tests,
+and running `pnpm contract:export` never need the wheels installed. The
+heavy-path engine tests are marked `skipif`/`importorskip` so `pnpm verify:api`
+passes credential- and GPU-free even when `pycolmap` is absent (the full COLMAP
+run is exercised by `scripts/seed_demo.py` and the screenshot/e2e path). When
+you touch the engine, keep new heavy imports inside functions.
+
 ### Python dependency updates
 
 `services/api/requirements.txt` is the human-edited input and
-`services/api/requirements.lock` is the complete exact-version Python 3.11
+`services/api/requirements.lock` is the complete exact-version Python
 resolution used by setup and CI. Do not edit the lock for routine feature work.
 
 The lock is resolved for CPython 3.11 on Linux/macOS and its pins carry no

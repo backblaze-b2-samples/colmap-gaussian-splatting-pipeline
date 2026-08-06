@@ -1,7 +1,33 @@
-<!-- last_verified: 2026-07-28 -->
+<!-- last_verified: 2026-08-06 -->
 # App Workflows
 
-User journeys inside the application.
+User journeys inside the application. The primary journey is the **Capture**
+lifecycle; the File Explorer, Upload, and Settings journeys are kept from the
+starter.
+
+## Create and run a Capture (primary journey)
+
+- User navigates to `/captures/new` and fills the create form:
+  - **Name** (free text; hint `e.g. heritage-facade-01`)
+  - **Source** (RadioGroup: Image set | Capture video; default Image set)
+  - **Quality** (Select: Low / Medium / High; default Medium)
+  - **Matcher** (Select: Exhaustive / Sequential; default Exhaustive)
+  - **Max image dimension** (numeric; default 1600, "downscales large frames so CPU SfM finishes quickly")
+- Submitting creates a `draft` capture (a manifest in B2) and lands on the detail page
+- **Ingest frames**: the detail page shows an ingest panel matching the source type — upload overlapping photos, or upload a video the server samples into frames. Frames are downscaled and stored under `captures/<id>/inputs/`; the capture becomes `ready`
+- **Run**: the Run button starts COLMAP SfM. The capture flips to `running` and the preview area shows an indeterminate stage list (SIFT extraction → matching → mapping → bundle → preview) — never a fabricated percentage. The page polls until the run finishes
+- **Done**: the detail page shows the sparse point-cloud preview, the pipeline stage timeline (with dense MVS marked skipped on a CPU host), reconstruction metrics, the `ns-train` command for GPU training, and the versioned artifacts on B2 with download links
+- **Edit / Delete / Re-run**: Edit opens the pre-filled form; Delete removes the capture's own B2 prefix (AlertDialog confirm); Re-run re-processes the current frames
+- On failure the detail page shows the recorded error in an Alert
+- See: [SfM reconstruction](features/sfm-reconstruction.md), [Capture ingest](features/capture-ingest.md), [Splat staging](features/splat-staging.md)
+
+## Browse the Captures library
+
+- User navigates to `/captures`
+- A grid of capture cards shows each reconstruction's preview thumbnail, status, frame count, and (when done) registered images + sparse points
+- The list polls while any capture is running so status flips and new previews appear automatically
+- Empty state offers a New capture CTA
+- See: [Captures library + dashboard](features/captures-dashboard.md)
 
 ## Upload Files
 
@@ -34,13 +60,12 @@ User journeys inside the application.
 ## View Dashboard
 
 - User navigates to `/` (home)
-- Three parallel API calls load: stats, recent files, upload activity — all served from one shared bucket listing that the API warms at startup
-- While stats load, the page states it in words above the cards rather than showing silent skeletons
-- Stats cards show: total files, storage used, uploads today, total downloads
-- Upload chart shows last 7 days of upload activity as bar chart
-- Recent uploads table shows last 10 files with filename, size, type, date. Each filename links to that file's preview on `/files` — `/files` teaches "click a file to preview it", so the same gesture here has to answer rather than being inert text
-- Empty state: "No files uploaded yet" messages
-- See: [Dashboard](features/dashboard.md)
+- Stat cards show: captures, frames ingested, sparse points reconstructed, artifacts on B2
+- A bar chart shows B2 write activity over the last 7 days
+- The recent-captures table lists the latest captures with their point counts, updated time, and status; each name links to the capture detail
+- While metrics load, the page states it in words above the cards rather than showing silent skeletons
+- Empty state: "No captures yet" with a New capture CTA
+- See: [Captures library + dashboard](features/captures-dashboard.md)
 
 ## Change Preferences
 

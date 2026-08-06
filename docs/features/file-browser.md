@@ -1,6 +1,11 @@
 <!-- last_verified: 2026-07-28 -->
 # Feature: File Browser
 
+> Kept from the starter. This is the **full-bucket** explorer over every object,
+> including each capture's `captures/<id>/` artifacts. It sits alongside the
+> app's scoped [Captures library](captures-dashboard.md), which lists only the
+> app's own reconstructions.
+
 ## Purpose
 List, preview, download, and delete files stored in Backblaze B2.
 

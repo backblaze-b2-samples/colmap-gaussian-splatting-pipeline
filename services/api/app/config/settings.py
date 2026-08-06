@@ -2,11 +2,25 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    b2_endpoint: str = "https://s3.us-west-004.backblazeb2.com"
-    b2_key_id: str = ""
+    # Backblaze B2 (S3-compatible). Env var names follow the standardized B2_*
+    # contract: B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY / B2_BUCKET_NAME /
+    # B2_REGION / B2_PUBLIC_URL_BASE.
+    b2_application_key_id: str = ""
     b2_application_key: str = ""
     b2_bucket_name: str = ""
-    b2_public_url: str = ""
+    # Region selects the S3 endpoint. B2's S3 endpoint is
+    # https://s3.<region>.backblazeb2.com — derived via the endpoint_url
+    # property below, so no region string is hardcoded here. Required at
+    # runtime; set B2_REGION in .env (see .env.example, e.g. us-east-005).
+    b2_region: str = ""
+    # Advanced override: set B2_ENDPOINT only to target a non-standard or
+    # S3-proxy endpoint. Empty by default so the endpoint is derived from
+    # b2_region.
+    b2_endpoint: str = ""
+    # Optional public base URL for public buckets — builds direct object URLs
+    # (e.g. preview PNGs). The app runs fine without it (falls back to
+    # presigned URLs), so it is functionally optional.
+    b2_public_url_base: str = ""
 
     api_port: int = 8000
     # Interactive API docs (/docs, /redoc, /openapi.json). On by default for
@@ -23,13 +37,29 @@ class Settings(BaseSettings):
     # listing each one. NEVER ship this to production.
     api_cors_origin_regex: str = ""
 
-    # Upload limits
-    max_file_size: int = 100 * 1024 * 1024  # 100MB
+    # Upload limits. Capture image sets and videos can be large; B2 handles
+    # objects far bigger than this — the cap only bounds what the in-memory API
+    # upload path buffers per request. Raise MAX_FILE_SIZE for bigger videos.
+    max_file_size: int = 500 * 1024 * 1024  # 500MB
+
+    # Hard per-run ceiling for a COLMAP reconstruction (seconds). A run that
+    # exceeds it is marked failed rather than pinning a worker forever. Generous
+    # for the small seed capture; raise it for large real-world image sets.
+    capture_run_timeout_seconds: float = 1800.0
+
+    # Frame sampling for a "capture video" ingest: how many frames to sample
+    # evenly across the clip (COLMAP wants well-spread, overlapping views).
+    video_frame_count: int = 40
+
+    # Force the SIFT feature extractor onto the CPU. COLMAP's GPU SIFT needs a
+    # CUDA build (the PyPI pycolmap wheel is CPU-only), and the marquee sparse
+    # SfM workload runs fine on CPU. Leave true for the default/macOS path.
+    force_cpu_sift: bool = True
 
     # Optional confinement for key-addressed reads/deletes. Empty by default so
     # the by-key routes accept any key shape (they deliberately support nested
     # folders and reserved-word segments). Point a fork at a bucket shared with
-    # other data? Set to e.g. "uploads/" to restrict all key ops to app uploads.
+    # other data? Set to e.g. "captures/" to restrict all key ops to this app.
     allowed_key_prefix: str = ""
 
     # Full-bucket listing cache (repo/list_cache.py). Both /files and
@@ -66,6 +96,16 @@ class Settings(BaseSettings):
     download_count_file: str = ".data/download_count.json"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @property
+    def endpoint_url(self) -> str:
+        """S3 endpoint for the configured region.
+
+        Derives ``https://s3.<region>.backblazeb2.com`` from ``b2_region`` so no
+        region string is hardcoded. ``b2_endpoint`` (empty by default) is an
+        advanced override for non-standard endpoints.
+        """
+        return self.b2_endpoint or f"https://s3.{self.b2_region}.backblazeb2.com"
 
     @property
     def cors_origins(self) -> list[str]:

@@ -1,10 +1,14 @@
 import type {
+  Capture,
+  CaptureCreate,
+  CaptureStats,
+  CaptureUpdate,
   DailyUploadCount,
   FileMetadata,
   FileMetadataDetail,
   FileUploadResponse,
   UploadStats,
-} from "@vibe-coding-starter-kit/shared";
+} from "@colmap-gaussian-splatting-pipeline/shared";
 
 // Single-origin deploys (Vercel `services`: one project serving web + API) put
 // the API under /api on the same origin, so no NEXT_PUBLIC_API_URL is needed —
@@ -16,7 +20,7 @@ export const API_BASE =
   (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:8000");
 
 type ApiClientRoute = {
-  method: "delete" | "get" | "post";
+  method: "delete" | "get" | "patch" | "post";
   path: string;
 };
 
@@ -35,6 +39,16 @@ export const API_CLIENT_ROUTES = {
   legacyFileMetadata: { method: "get", path: "/files/{key}" },
   legacyFileDelete: { method: "delete", path: "/files/{key}" },
   upload: { method: "post", path: "/upload" },
+  // Photogrammetry captures (primary entity).
+  captures: { method: "get", path: "/captures" },
+  captureStats: { method: "get", path: "/captures/stats" },
+  createCapture: { method: "post", path: "/captures" },
+  capture: { method: "get", path: "/captures/{capture_id}" },
+  updateCapture: { method: "patch", path: "/captures/{capture_id}" },
+  deleteCapture: { method: "delete", path: "/captures/{capture_id}" },
+  ingestImages: { method: "post", path: "/captures/{capture_id}/images" },
+  ingestVideo: { method: "post", path: "/captures/{capture_id}/video" },
+  runCapture: { method: "post", path: "/captures/{capture_id}/run" },
 } as const satisfies Record<string, ApiClientRoute>;
 
 /** Typed API error with HTTP status code for caller-side branching. */
@@ -277,4 +291,73 @@ export function uploadFile(
     );
     xhr.send(formData);
   });
+}
+
+// --- Photogrammetry captures -----------------------------------------------
+
+const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+
+function capturePath(template: string, id: string): string {
+  return template.replace("{capture_id}", encodeURIComponent(id));
+}
+
+export async function getCaptures() {
+  return apiFetch<Capture[]>(API_CLIENT_ROUTES.captures.path);
+}
+
+export async function getCaptureStats() {
+  return apiFetch<CaptureStats>(API_CLIENT_ROUTES.captureStats.path);
+}
+
+export async function getCapture(id: string) {
+  return apiFetch<Capture>(capturePath(API_CLIENT_ROUTES.capture.path, id));
+}
+
+export async function createCapture(body: CaptureCreate) {
+  return apiFetch<Capture>(API_CLIENT_ROUTES.createCapture.path, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateCapture(id: string, body: CaptureUpdate) {
+  return apiFetch<Capture>(capturePath(API_CLIENT_ROUTES.updateCapture.path, id), {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteCapture(id: string) {
+  return apiFetch<{ deleted: boolean; id: string }>(
+    capturePath(API_CLIENT_ROUTES.deleteCapture.path, id),
+    { method: "DELETE" }
+  );
+}
+
+export async function runCapture(id: string) {
+  return apiFetch<Capture>(capturePath(API_CLIENT_ROUTES.runCapture.path, id), {
+    method: "POST",
+  });
+}
+
+/** Upload still frames into a capture's inputs/ prefix (multipart). */
+export async function ingestImages(id: string, files: File[]) {
+  const form = new FormData();
+  for (const file of files) form.append("files", file);
+  return apiFetch<Capture>(
+    capturePath(API_CLIENT_ROUTES.ingestImages.path, id),
+    { method: "POST", body: form }
+  );
+}
+
+/** Upload a capture video; the server samples it into frames (multipart). */
+export async function ingestVideo(id: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch<Capture>(
+    capturePath(API_CLIENT_ROUTES.ingestVideo.path, id),
+    { method: "POST", body: form }
+  );
 }

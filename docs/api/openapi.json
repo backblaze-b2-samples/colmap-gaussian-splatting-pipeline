@@ -1,6 +1,37 @@
 {
   "components": {
     "schemas": {
+      "Body_ingest_images_endpoint_captures__capture_id__images_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Body_ingest_images_endpoint_captures__capture_id__images_post",
+        "type": "object"
+      },
+      "Body_ingest_video_endpoint_captures__capture_id__video_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_ingest_video_endpoint_captures__capture_id__video_post",
+        "type": "object"
+      },
       "Body_upload_upload_post": {
         "properties": {
           "file": {
@@ -13,6 +44,489 @@
           "file"
         ],
         "title": "Body_upload_upload_post",
+        "type": "object"
+      },
+      "Capture": {
+        "description": "Full Capture record as persisted and returned to the frontend.",
+        "properties": {
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/CaptureArtifact"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_count": {
+            "default": 0,
+            "title": "Input Count",
+            "type": "integer"
+          },
+          "matcher": {
+            "default": "exhaustive",
+            "enum": [
+              "exhaustive",
+              "sequential"
+            ],
+            "title": "Matcher",
+            "type": "string"
+          },
+          "max_image_dimension": {
+            "default": 1600,
+            "maximum": 8192.0,
+            "minimum": 256.0,
+            "title": "Max Image Dimension",
+            "type": "integer"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/CaptureMetrics"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "preview_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Key"
+          },
+          "quality": {
+            "default": "medium",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Quality",
+            "type": "string"
+          },
+          "source_type": {
+            "default": "images",
+            "enum": [
+              "images",
+              "video"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/CaptureStage"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "ready",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "train_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Command"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Capture",
+        "type": "object"
+      },
+      "CaptureArtifact": {
+        "description": "One derived object written back to B2 by a completed run.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "size_human": {
+            "title": "Size Human",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "key",
+          "size_bytes",
+          "size_human"
+        ],
+        "title": "CaptureArtifact",
+        "type": "object"
+      },
+      "CaptureCreate": {
+        "description": "POST /captures body.",
+        "properties": {
+          "matcher": {
+            "default": "exhaustive",
+            "enum": [
+              "exhaustive",
+              "sequential"
+            ],
+            "title": "Matcher",
+            "type": "string"
+          },
+          "max_image_dimension": {
+            "default": 1600,
+            "maximum": 8192.0,
+            "minimum": 256.0,
+            "title": "Max Image Dimension",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "quality": {
+            "default": "medium",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Quality",
+            "type": "string"
+          },
+          "source_type": {
+            "default": "images",
+            "enum": [
+              "images",
+              "video"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CaptureCreate",
+        "type": "object"
+      },
+      "CaptureMetrics": {
+        "description": "Numbers the reconstruction produced \u2014 drive the dashboard + detail view.",
+        "properties": {
+          "artifact_bytes": {
+            "default": 0,
+            "title": "Artifact Bytes",
+            "type": "integer"
+          },
+          "dense_enabled": {
+            "default": false,
+            "title": "Dense Enabled",
+            "type": "boolean"
+          },
+          "device": {
+            "default": "cpu",
+            "title": "Device",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "default": 0.0,
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "input_images": {
+            "default": 0,
+            "title": "Input Images",
+            "type": "integer"
+          },
+          "mean_reprojection_error": {
+            "default": 0.0,
+            "title": "Mean Reprojection Error",
+            "type": "number"
+          },
+          "observations": {
+            "default": 0,
+            "title": "Observations",
+            "type": "integer"
+          },
+          "registered_images": {
+            "default": 0,
+            "title": "Registered Images",
+            "type": "integer"
+          },
+          "source_bytes": {
+            "default": 0,
+            "title": "Source Bytes",
+            "type": "integer"
+          },
+          "sparse_points": {
+            "default": 0,
+            "title": "Sparse Points",
+            "type": "integer"
+          }
+        },
+        "title": "CaptureMetrics",
+        "type": "object"
+      },
+      "CaptureStage": {
+        "description": "One step of the reconstruction pipeline, for the detail-view timeline.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "status": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "running",
+              "done",
+              "skipped",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "CaptureStage",
+        "type": "object"
+      },
+      "CaptureStats": {
+        "description": "Aggregate capture + storage metrics for the dashboard.",
+        "properties": {
+          "artifact_bytes": {
+            "title": "Artifact Bytes",
+            "type": "integer"
+          },
+          "artifact_bytes_human": {
+            "title": "Artifact Bytes Human",
+            "type": "string"
+          },
+          "artifact_count": {
+            "title": "Artifact Count",
+            "type": "integer"
+          },
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "draft": {
+            "title": "Draft",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "images_ingested": {
+            "title": "Images Ingested",
+            "type": "integer"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "source_bytes": {
+            "title": "Source Bytes",
+            "type": "integer"
+          },
+          "source_bytes_human": {
+            "title": "Source Bytes Human",
+            "type": "string"
+          },
+          "sparse_points": {
+            "title": "Sparse Points",
+            "type": "integer"
+          },
+          "total_captures": {
+            "title": "Total Captures",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_captures",
+          "draft",
+          "ready",
+          "running",
+          "done",
+          "failed",
+          "images_ingested",
+          "sparse_points",
+          "artifact_count",
+          "artifact_bytes",
+          "artifact_bytes_human",
+          "source_bytes",
+          "source_bytes_human"
+        ],
+        "title": "CaptureStats",
+        "type": "object"
+      },
+      "CaptureUpdate": {
+        "description": "PATCH /captures/{id} body \u2014 every field optional (partial update).",
+        "properties": {
+          "matcher": {
+            "anyOf": [
+              {
+                "enum": [
+                  "exhaustive",
+                  "sequential"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matcher"
+          },
+          "max_image_dimension": {
+            "anyOf": [
+              {
+                "maximum": 8192.0,
+                "minimum": 256.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Image Dimension"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "images",
+                  "video"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          }
+        },
+        "title": "CaptureUpdate",
         "type": "object"
       },
       "DailyUploadCount": {
@@ -397,12 +911,386 @@
     }
   },
   "info": {
-    "description": "Local API for the Vibe Coding Starter Kit template, providing file upload and management backed by Backblaze B2. This contract documents the template's local API, not a hosted public endpoint.",
-    "title": "Vibe Coding Starter Kit API",
+    "description": "Local API for the COLMAP Gaussian Splatting Pipeline: create a Capture from an image set or capture video, run COLMAP structure-from-motion on CPU, and stage a Nerfstudio/gsplat-ready bundle. Every input and derived artifact is versioned in Backblaze B2. This contract documents the local API, not a hosted public endpoint.",
+    "title": "COLMAP Gaussian Splatting Pipeline API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/captures": {
+      "get": {
+        "operationId": "list_captures_endpoint_captures_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Capture"
+                  },
+                  "title": "Response List Captures Endpoint Captures Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Captures Endpoint",
+        "tags": [
+          "captures"
+        ]
+      },
+      "post": {
+        "operationId": "create_capture_endpoint_captures_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capture"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Capture Endpoint",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/captures/stats": {
+      "get": {
+        "operationId": "capture_stats_endpoint_captures_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capture Stats Endpoint",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/captures/{capture_id}": {
+      "delete": {
+        "operationId": "delete_capture_endpoint_captures__capture_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capture_id",
+            "required": true,
+            "schema": {
+              "title": "Capture Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "title": "Response Delete Capture Endpoint Captures  Capture Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Capture Endpoint",
+        "tags": [
+          "captures"
+        ]
+      },
+      "get": {
+        "operationId": "get_capture_endpoint_captures__capture_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capture_id",
+            "required": true,
+            "schema": {
+              "title": "Capture Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capture"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Capture Endpoint",
+        "tags": [
+          "captures"
+        ]
+      },
+      "patch": {
+        "operationId": "update_capture_endpoint_captures__capture_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capture_id",
+            "required": true,
+            "schema": {
+              "title": "Capture Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capture"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Capture Endpoint",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/captures/{capture_id}/images": {
+      "post": {
+        "operationId": "ingest_images_endpoint_captures__capture_id__images_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capture_id",
+            "required": true,
+            "schema": {
+              "title": "Capture Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_ingest_images_endpoint_captures__capture_id__images_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capture"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Images Endpoint",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/captures/{capture_id}/run": {
+      "post": {
+        "operationId": "run_capture_endpoint_captures__capture_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capture_id",
+            "required": true,
+            "schema": {
+              "title": "Capture Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capture"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Capture Endpoint",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/captures/{capture_id}/video": {
+      "post": {
+        "operationId": "ingest_video_endpoint_captures__capture_id__video_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capture_id",
+            "required": true,
+            "schema": {
+              "title": "Capture Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_ingest_video_endpoint_captures__capture_id__video_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capture"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Video Endpoint",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
     "/files": {
       "get": {
         "operationId": "list_files_endpoint_files_get",

@@ -1,6 +1,11 @@
 <!-- last_verified: 2026-07-28 -->
 # Feature: File Upload
 
+> In this app the generic browser upload is the **raw-frame ingest primitive**:
+> the same B2 upload path backs capture ingest (`POST /captures/{id}/images`),
+> and the standalone `/upload` page + full-bucket File Explorer are kept from the
+> starter for direct bucket access. See [capture-ingest.md](capture-ingest.md).
+
 ## Purpose
 Upload files from the browser to Backblaze B2 with real-time progress tracking.
 

@@ -102,7 +102,7 @@ export function UploadChart() {
           <EmptyState
             icon={BarChart3}
             title="No activity yet"
-            description="Upload files to see activity trends here."
+            description="Create captures and run reconstructions to see B2 write activity here."
           />
         ) : (
           <ChartContainer config={chartConfig} className="h-[240px] w-full">

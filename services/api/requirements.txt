@@ -12,6 +12,17 @@ boto3>=1.35.0
 Pillow>=11.0.0
 PyPDF2>=3.0.0
 
+# COLMAP structure-from-motion + capture pipeline. All heavy wheels are
+# LAZY-imported inside app/repo/ functions, so the FastAPI app, test collection,
+# and `pnpm contract:export` import fine even if a wheel is missing on a given
+# platform. Pinned (unbounded ML deps are a known false-green class).
+pycolmap>=3.10,<3.12
+numpy>=1.26,<2
+matplotlib>=3.8
+imageio>=2.34
+imageio-ffmpeg>=0.5
+plyfile>=1.0
+
 # Dev / quality
 ruff>=0.8.0
 pytest>=8.0.0
