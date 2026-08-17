@@ -3,8 +3,6 @@
 
 An end-to-end, capture-to-B2 **photogrammetry pipeline**. Create a **Capture** from an image set or a capture video, run **COLMAP** structure-from-motion (`pycolmap`) on CPU to reconstruct a sparse point cloud + camera poses, then stage a **Nerfstudio / gsplat-ready bundle** (`transforms.json` + frames + sparse model + `points.ply`) for downstream 3D Gaussian Splatting / NeRF training. Every input and derived artifact is versioned under the capture's own prefix on **[Backblaze B2](https://www.backblaze.com/cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-colmap-gaussian-splatting-pipeline)** over the S3-compatible API. Runs on local OSS only — COLMAP is keyless; the only secret is your B2 credentials.
 
-Explore the official [Backblaze B2 AI integrations and sample applications](https://www.backblaze.com/cloud-storage/b2-ai-integrations?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-colmap-gaussian-splatting-pipeline) directory and the checked-in [local OpenAPI contract](docs/api/openapi.json).
-
 **What you get out of the box:**
 - Full-stack UI (Next.js 16 + React 19 + Tailwind v4 + shadcn/ui) with a Captures library, capture detail (stage timeline, sparse-cloud preview, artifacts), and a photogrammetry dashboard
 - Real COLMAP SfM via `pycolmap` — SIFT extraction (CPU), matching, incremental mapping — run in an isolated worker process so a native crash can't wedge the API
