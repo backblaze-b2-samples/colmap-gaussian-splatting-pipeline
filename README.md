@@ -31,7 +31,7 @@ An end-to-end, capture-to-B2 **photogrammetry pipeline**. Create a **Capture** f
 
 ## Quick Start
 
-You need: Node.js >= 20, pnpm >= 9, Python >= 3.11, and a free **[Backblaze B2 account](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-colmap-gaussian-splatting-pipeline)**. No GPU is required for the sparse reconstruction; dense MVS and splat training are CUDA-only and auto-gated.
+You need: Node.js >= 20.9.0, pnpm >= 9, Python >= 3.11, and a free **[Backblaze B2 account](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-colmap-gaussian-splatting-pipeline)**. No GPU is required for the sparse reconstruction; dense MVS and splat training are CUDA-only and auto-gated.
 
 ### Supported local environments
 
