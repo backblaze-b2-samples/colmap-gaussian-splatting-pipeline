@@ -21,7 +21,7 @@ numpy>=1.26,<2
 matplotlib>=3.8
 imageio>=2.34
 imageio-ffmpeg>=0.5
-plyfile>=1.0
+plyfile>=1.1.5
 
 # Dev / quality
 ruff>=0.8.0
